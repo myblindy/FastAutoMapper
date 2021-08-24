@@ -11,6 +11,17 @@ namespace FastAutoMapper.Internal;
 [Generator]
 public class SourceGenerator : ISourceGenerator
 {
+    static IEnumerable<ISymbol> GetNestedMembers(INamedTypeSymbol namedTypeSymbol)
+    {
+        while (namedTypeSymbol is not null)
+        {
+            foreach (var member in namedTypeSymbol.GetMembers())
+                yield return member;
+
+            namedTypeSymbol = namedTypeSymbol.BaseType;
+        }
+    }
+
     public void Execute(GeneratorExecutionContext context)
     {
         context.AddSource("FastAutoMapperBaseClass.cs", @"
@@ -39,8 +50,8 @@ partial class {kvp.Key}
             foreach (var (fromSymbol, toSymbol, memberOverrides) in mi.TypeMaps)
             {
                 sb.AppendLine($@"public {toSymbol} Map({fromSymbol} src) {{ var result = new {toSymbol}();");
-                foreach (var toSymbolProperty in toSymbol.GetMembers().OfType<IPropertySymbol>())
-                    if (fromSymbol.GetMembers(toSymbolProperty.Name).FirstOrDefault() is IPropertySymbol matchingFromSymbol)
+                foreach (var toSymbolProperty in GetNestedMembers(toSymbol).OfType<IPropertySymbol>())
+                    if (GetNestedMembers(fromSymbol).FirstOrDefault(m => m.Name == toSymbolProperty.Name) is IPropertySymbol matchingFromSymbol)
                         if (memberOverrides.FirstOrDefault(w => w.ToField == toSymbolProperty.Name) is { } @override && @override is not (null, null))
                         {
                             var lambdaParameterName = @override.FromLambdaExpression.Parameter.Identifier.Text;
@@ -68,7 +79,7 @@ partial class {kvp.Key}
 
     public void Initialize(GeneratorInitializationContext context)
     {
-        //Debugger.Launch();
+        Debugger.Launch();
 
         context.RegisterForSyntaxNotifications(() => new SyntaxReceiver());
     }
@@ -79,7 +90,7 @@ partial class {kvp.Key}
         {
             public List<(INamedTypeSymbol From, INamedTypeSymbol To, List<(string ToField, SimpleLambdaExpressionSyntax FromLambdaExpression)> MemberOverrides)> TypeMaps = new();
         }
-        public readonly Dictionary<string, MapperInfo> DerivedMappers = new();
+        public readonly Dictionary<ITypeSymbol, MapperInfo> DerivedMappers = new();
 
         public void OnVisitSyntaxNode(GeneratorSyntaxContext context)
         {
@@ -93,10 +104,13 @@ partial class {kvp.Key}
                 && memberAccessExpressionSyntax.Expression is IdentifierNameSyntax memberAccessObjectIdentifierNameSyntax)
             {
                 var symbolInfo = context.SemanticModel.GetSymbolInfo(memberAccessObjectIdentifierNameSyntax);
-                if (symbolInfo.Symbol is ILocalSymbol localSymbol && localSymbol.Type.BaseType?.Name == "FastAutoMapperBase")
+                var localSymbol = symbolInfo.Symbol as ILocalSymbol;
+                var propertySymbol = symbolInfo.Symbol as IPropertySymbol;
+
+                if (localSymbol?.Type.BaseType?.Name == "FastAutoMapperBase" || propertySymbol?.Type.BaseType?.Name == "FastAutoMapperBase")
                 {
-                    if (!DerivedMappers.TryGetValue(localSymbol.Type.Name, out var mi))
-                        DerivedMappers[localSymbol.Type.Name] = mi = new();
+                    if (!DerivedMappers.TryGetValue(localSymbol?.Type ?? propertySymbol?.Type, out var mi))
+                        DerivedMappers[localSymbol?.Type ?? propertySymbol?.Type] = mi = new();
 
                     List<(string FromField, SimpleLambdaExpressionSyntax FromLambdaExpression)> overrideList = new();
                     mi.TypeMaps.Add(((INamedTypeSymbol)context.SemanticModel.GetSymbolInfo(genericNameSyntax.TypeArgumentList.Arguments[0]).Symbol,
