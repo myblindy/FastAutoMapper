@@ -55,6 +55,11 @@ partial class {kvp.Key}
                 sb.AppendLine("return result; }");
             }
 
+            sb.AppendLine("public T Map<T>(object src) {");
+            foreach (var (fromSymbol, toSymbol, memberOverrides) in mi.TypeMaps)
+                sb.AppendLine($"if(src is {fromSymbol} {fromSymbol}Value) return (T)(object)Map({fromSymbol}Value);");
+            sb.AppendLine("return null; }");
+
             sb.AppendLine("}");
         }
 
