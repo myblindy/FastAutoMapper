@@ -42,8 +42,12 @@ class FastAutoMapperBase
 
         foreach (var kvp in sr.DerivedMappers)
         {
+            var namespaceRequired = kvp.Key.ContainingNamespace is not null;
+            if (namespaceRequired)
+                sb.AppendLine($"namespace {kvp.Key.ContainingNamespace} {{");
+
             sb.AppendLine($@"
-partial class {kvp.Key}
+partial class {kvp.Key.Name}
 {{");
 
             var mi = kvp.Value;
@@ -72,6 +76,9 @@ partial class {kvp.Key}
             sb.AppendLine("return default; }");
 
             sb.AppendLine("}");
+
+            if (namespaceRequired)
+                sb.AppendLine("}");
         }
 
         context.AddSource("FastAutoMapperPartialClasses.cs", sb.ToString());
@@ -79,7 +86,7 @@ partial class {kvp.Key}
 
     public void Initialize(GeneratorInitializationContext context)
     {
-        Debugger.Launch();
+        //Debugger.Launch();
 
         context.RegisterForSyntaxNotifications(() => new SyntaxReceiver());
     }
