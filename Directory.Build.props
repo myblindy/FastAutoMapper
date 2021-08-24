@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <Version>0.1.1</Version>
+
+    <LangVersion>preview</LangVersion>
+    <AnalysisMode>AllEnabledByDefault</AnalysisMode>
+
+    <EmbedAllSources>true</EmbedAllSources>
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+</Project>

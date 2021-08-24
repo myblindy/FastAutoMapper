@@ -1,6 +1,11 @@
-# FastAutoMapper
+[![publish to nuget](https://github.com/myblindy/FastAutoMapper/actions/workflows/nuget.yml/badge.svg)](https://github.com/myblindy/FastAutoMapper/actions/workflows/nuget.yml)
+[![NuGet](http://img.shields.io/nuget/v/MB.FastAutoMapper.svg)](https://www.nuget.org/packages/MB.FastAutoMapper/)
+
+# MB.FastAutoMapper
 
 The aim of this project is to provide compile-time support for auto-mapping by using source generation. The ubiquitous AutoMapper instead builds the mapping code at run-time.
+
+One of the benefits of this approach, besides paying the mapping cost at compile-time instead of run-time everytime, is that any mapping errors are also caught at compile time due to the strict type-safety of C#. 
 
 The code is pretty simple to use, simply reference the NuGet package `MB.FastAutoMapper` and write something like this:
 
