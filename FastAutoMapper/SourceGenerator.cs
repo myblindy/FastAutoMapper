@@ -53,8 +53,8 @@ partial class {kvp.Key.Name}
             var mi = kvp.Value;
             foreach (var (fromSymbol, toSymbol, memberOverrides) in mi.TypeMaps)
             {
-                sb.AppendLine($@"public {toSymbol} Map({fromSymbol} src) {{ var result = new {toSymbol}();");
-                foreach (var toSymbolProperty in GetNestedMembers(toSymbol).OfType<IPropertySymbol>())
+                sb.AppendLine($@"public {toSymbol} Map({fromSymbol} src) => new () {{");
+                foreach (var toSymbolProperty in GetNestedMembers(toSymbol).OfType<IPropertySymbol>().Where(ps => !ps.IsReadOnly))
                     if (GetNestedMembers(fromSymbol).FirstOrDefault(m => m.Name == toSymbolProperty.Name) is IPropertySymbol matchingFromSymbol)
                         if (memberOverrides.FirstOrDefault(w => w.ToField == toSymbolProperty.Name) is { } @override && @override is not (null, null))
                         {
@@ -63,11 +63,11 @@ partial class {kvp.Key.Name}
                                 @override.FromLambdaExpression.ExpressionBody.DescendantNodes().OfType<IdentifierNameSyntax>()
                                     .Where(ins => ins.Identifier.Text == lambdaParameterName),
                                 (node, n2) => SyntaxFactory.IdentifierName("src"));
-                            sb.AppendLine($@"result.{toSymbolProperty.Name} = {newExpression};");
+                            sb.AppendLine($@"{toSymbolProperty.Name} = {newExpression},");
                         }
                         else
-                            sb.AppendLine(@$"result.{toSymbolProperty.Name} = src.{matchingFromSymbol.Name};");
-                sb.AppendLine("return result; }");
+                            sb.AppendLine(@$"{toSymbolProperty.Name} = src.{matchingFromSymbol.Name},");
+                sb.AppendLine("};");
             }
 
             sb.AppendLine("public T Map<T>(object src) {");
