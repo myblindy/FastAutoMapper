@@ -13,10 +13,12 @@ public class SourceGenerator : ISourceGenerator
 {
     static IEnumerable<ISymbol> GetNestedMembers(INamedTypeSymbol namedTypeSymbol)
     {
+        var set = new HashSet<string>();
         while (namedTypeSymbol is not null)
         {
             foreach (var member in namedTypeSymbol.GetMembers())
-                yield return member;
+                if (set.Add(member.Name))
+                    yield return member;
 
             namedTypeSymbol = namedTypeSymbol.BaseType;
         }
