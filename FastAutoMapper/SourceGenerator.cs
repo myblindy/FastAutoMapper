@@ -1,9 +1,11 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Net;
 using System.Text;
 
 namespace FastAutoMapper.Internal;
@@ -32,6 +34,7 @@ namespace FastAutoMapper;
 struct FastAutoMapperConfiguration<TFrom, TTo>
 {
     public FastAutoMapperConfiguration<TFrom, TTo> ForMember<TToField>(Func<TTo, TToField> toSelect, Func<TFrom, TToField> fromSelect) => this;
+    public FastAutoMapperConfiguration<TFrom, TTo> ForMember<TToField>(Func<TTo, TToField> toSelect, Func<TFrom, object, TToField> fromSelect) => this;
 }
 
 class FastAutoMapperBase
@@ -44,7 +47,7 @@ class FastAutoMapperBase
 
         foreach (var kvp in sr.DerivedMappers)
         {
-            var namespaceRequired = kvp.Key.ContainingNamespace is not null;
+            var namespaceRequired = kvp.Key.ContainingNamespace is INamespaceSymbol namespaceSymbol && !namespaceSymbol.IsGlobalNamespace;
             if (namespaceRequired)
                 sb.AppendLine($"namespace {kvp.Key.ContainingNamespace} {{");
 
@@ -55,26 +58,32 @@ partial class {kvp.Key.Name}
             var mi = kvp.Value;
             foreach (var (fromSymbol, toSymbol, memberOverrides) in mi.TypeMaps)
             {
-                sb.AppendLine($@"public {toSymbol} Map({fromSymbol} src) => new () {{");
+                sb.AppendLine($@"public {toSymbol} Map({fromSymbol} src, object info = null) => new () {{");
                 foreach (var toSymbolProperty in GetNestedMembers(toSymbol).OfType<IPropertySymbol>().Where(ps => !ps.IsReadOnly))
-                    if (GetNestedMembers(fromSymbol).FirstOrDefault(m => m.Name == toSymbolProperty.Name) is IPropertySymbol matchingFromSymbol)
-                        if (memberOverrides.FirstOrDefault(w => w.ToField == toSymbolProperty.Name) is { } @override && @override is not (null, null))
-                        {
-                            var lambdaParameterName = @override.FromLambdaExpression.Parameter.Identifier.Text;
-                            var newExpression = @override.FromLambdaExpression.ExpressionBody.ReplaceNodes(
-                                @override.FromLambdaExpression.ExpressionBody.DescendantNodes().OfType<IdentifierNameSyntax>()
-                                    .Where(ins => ins.Identifier.Text == lambdaParameterName),
-                                (node, n2) => SyntaxFactory.IdentifierName("src"));
-                            sb.AppendLine($@"{toSymbolProperty.Name} = {newExpression},");
-                        }
-                        else
-                            sb.AppendLine(@$"{toSymbolProperty.Name} = src.{matchingFromSymbol.Name},");
+                    if (memberOverrides.FirstOrDefault(w => w.ToField == toSymbolProperty.Name) is { } @override && @override is not (null, null))
+                    {
+                        var lambdaParameterNames =
+                            @override.FromLambdaExpression is SimpleLambdaExpressionSyntax simpleLambdaExpressionSyntax ? new[] { simpleLambdaExpressionSyntax.Parameter.Identifier.Text }
+                            : @override.FromLambdaExpression is ParenthesizedLambdaExpressionSyntax parenthesizedLambdaExpressionSyntax ? parenthesizedLambdaExpressionSyntax.ParameterList.Parameters.Select(p => p.Identifier.Text).ToArray()
+                            : throw new InvalidOperationException();
+                        var lambdaParameterMap = new Dictionary<string, string>() { [lambdaParameterNames[0]] = "src" };
+                        if (lambdaParameterNames.Length > 1) lambdaParameterMap.Add(lambdaParameterNames[1], "info");
+                        if (lambdaParameterNames.Length > 2) throw new InvalidOperationException();
+
+                        var newExpression = @override.FromLambdaExpression.ExpressionBody.ReplaceNodes(
+                            @override.FromLambdaExpression.ExpressionBody.DescendantNodes().OfType<IdentifierNameSyntax>()
+                                .Where(ins => lambdaParameterMap.ContainsKey(ins.Identifier.Text)),
+                            (node, n2) => SyntaxFactory.IdentifierName(lambdaParameterMap[node.Identifier.Text]));
+                        sb.AppendLine($@"{toSymbolProperty.Name} = {newExpression},");
+                    }
+                    else if (GetNestedMembers(fromSymbol).FirstOrDefault(m => m.Name == toSymbolProperty.Name) is IPropertySymbol matchingFromSymbol)
+                        sb.AppendLine(@$"{toSymbolProperty.Name} = src.{matchingFromSymbol.Name},");
                 sb.AppendLine("};");
             }
 
-            sb.AppendLine("public T Map<T>(object src) {");
+            sb.AppendLine("public T Map<T>(object src, object info = null) {");
             foreach (var (fromSymbol, toSymbol, memberOverrides) in mi.TypeMaps)
-                sb.AppendLine($"{{ if(src is {fromSymbol} val) return (T)(object)Map(val); }}");
+                sb.AppendLine($"{{ if(src is {fromSymbol} val) return (T)(object)Map(val, info); }}");
             sb.AppendLine("return default; }");
 
             sb.AppendLine("}");
@@ -97,7 +106,7 @@ partial class {kvp.Key.Name}
     {
         internal class MapperInfo
         {
-            public List<(INamedTypeSymbol From, INamedTypeSymbol To, List<(string ToField, SimpleLambdaExpressionSyntax FromLambdaExpression)> MemberOverrides)> TypeMaps = new();
+            public List<(INamedTypeSymbol From, INamedTypeSymbol To, List<(string ToField, LambdaExpressionSyntax FromLambdaExpression)> MemberOverrides)> TypeMaps = new();
         }
         public readonly Dictionary<ITypeSymbol, MapperInfo> DerivedMappers = new();
 
@@ -121,7 +130,7 @@ partial class {kvp.Key.Name}
                     if (!DerivedMappers.TryGetValue(localSymbol?.Type ?? propertySymbol?.Type, out var mi))
                         DerivedMappers[localSymbol?.Type ?? propertySymbol?.Type] = mi = new();
 
-                    List<(string FromField, SimpleLambdaExpressionSyntax FromLambdaExpression)> overrideList = new();
+                    List<(string FromField, LambdaExpressionSyntax FromLambdaExpression)> overrideList = new();
                     mi.TypeMaps.Add(((INamedTypeSymbol)context.SemanticModel.GetSymbolInfo(genericNameSyntax.TypeArgumentList.Arguments[0]).Symbol,
                         (INamedTypeSymbol)context.SemanticModel.GetSymbolInfo(genericNameSyntax.TypeArgumentList.Arguments[1]).Symbol, overrideList));
 
@@ -133,17 +142,16 @@ partial class {kvp.Key.Name}
                         && parentinvocationExpressionSyntax.ArgumentList.Arguments[0].Expression is SimpleLambdaExpressionSyntax toOverrideSimpleLambdaExpressionSyntax
                         && toOverrideSimpleLambdaExpressionSyntax.ExpressionBody is MemberAccessExpressionSyntax toOverrideMemberAccessExpressionSyntax
                         && toOverrideMemberAccessExpressionSyntax.Name is IdentifierNameSyntax toOverrideIdentifierNameSyntax
-                        && parentinvocationExpressionSyntax.ArgumentList.Arguments[1].Expression is SimpleLambdaExpressionSyntax fromSimpleLambdaExpressionSyntax)
+                        && parentinvocationExpressionSyntax.ArgumentList.Arguments[1].Expression is LambdaExpressionSyntax fromLambdaExpressionSyntax)
                     {
                         // rewrite the "from" lambda expression to contain full type names with namespaces
-                        var replacements = fromSimpleLambdaExpressionSyntax.DescendantNodes().OfType<IdentifierNameSyntax>()
+                        var replacements = fromLambdaExpressionSyntax.DescendantNodes().OfType<IdentifierNameSyntax>()
                             .Select(ins => (symbol: context.SemanticModel.GetSymbolInfo(ins).Symbol, ins))
                             .Where(w => w.symbol?.Kind == SymbolKind.NamedType && !w.symbol.ContainingNamespace.IsGlobalNamespace)
                             .ToDictionary(w => w.ins, w => SyntaxFactory.IdentifierName($"{w.symbol}"));
-                        fromSimpleLambdaExpressionSyntax = fromSimpleLambdaExpressionSyntax.ReplaceNodes(
-                            replacements.Keys, (node, n2) => replacements[node]);
+                        fromLambdaExpressionSyntax = fromLambdaExpressionSyntax.ReplaceNodes(replacements.Keys, (node, n2) => replacements[node]);
 
-                        overrideList.Add((toOverrideIdentifierNameSyntax.Identifier.Text, fromSimpleLambdaExpressionSyntax));
+                        overrideList.Add((toOverrideIdentifierNameSyntax.Identifier.Text, fromLambdaExpressionSyntax));
 
                         parent = parent.Parent?.Parent;
                     }
