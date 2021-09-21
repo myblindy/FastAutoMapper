@@ -29,6 +29,8 @@ public class SourceGenerator : ISourceGenerator
     public void Execute(GeneratorExecutionContext context)
     {
         context.AddSource("FastAutoMapperBaseClass.cs", @"
+using System;
+
 namespace FastAutoMapper;
 
 struct FastAutoMapperConfiguration<TFrom, TTo>
@@ -58,7 +60,7 @@ partial class {kvp.Key.Name}
             var mi = kvp.Value;
             foreach (var (fromSymbol, toSymbol, memberOverrides) in mi.TypeMaps)
             {
-                sb.AppendLine($@"public {toSymbol} Map({fromSymbol} src, object info = null) => new () {{");
+                sb.AppendLine($@"public {toSymbol} Map({fromSymbol} src, object? info = null) => new () {{");
                 foreach (var toSymbolProperty in GetNestedMembers(toSymbol).OfType<IPropertySymbol>().Where(ps => !ps.IsReadOnly))
                     if (memberOverrides.FirstOrDefault(w => w.ToField == toSymbolProperty.Name) is { } @override && @override is not (null, null))
                     {
@@ -81,7 +83,7 @@ partial class {kvp.Key.Name}
                 sb.AppendLine("};");
             }
 
-            sb.AppendLine("public T Map<T>(object src, object info = null) {");
+            sb.AppendLine("public T? Map<T>(object src, object? info = null) {");
             foreach (var (fromSymbol, toSymbol, memberOverrides) in mi.TypeMaps)
                 sb.AppendLine($"{{ if(src is {fromSymbol} val) return (T)(object)Map(val, info); }}");
             sb.AppendLine("return default; }");
@@ -108,7 +110,9 @@ partial class {kvp.Key.Name}
         {
             public List<(INamedTypeSymbol From, INamedTypeSymbol To, List<(string ToField, LambdaExpressionSyntax FromLambdaExpression)> MemberOverrides)> TypeMaps = new();
         }
-        public readonly Dictionary<ITypeSymbol, MapperInfo> DerivedMappers = new();
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("MicrosoftCodeAnalysisCorrectness", "RS1024:Compare symbols correctly", Justification = "It's correct, Roslyn just doesn't check deep enough")]
+        public readonly Dictionary<ITypeSymbol, MapperInfo> DerivedMappers = new(SymbolEqualityComparer.Default);
 
         public void OnVisitSyntaxNode(GeneratorSyntaxContext context)
         {

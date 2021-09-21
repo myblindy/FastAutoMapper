@@ -36,7 +36,7 @@ namespace P
             var mapper = new Mapper();
             mapper.CreateMap<From, B.To>()
                 .ForMember(x => x.Color, x => new Vector3((float)x.Color[0], (float)x.Color[1], (float)x.Color[2]))
-                .ForMember(x => x.Info, (x, info) => (int)info);
+                .ForMember(x => x.Info, (x, info) => (int)info!);
 
             var from = new From { Text = "Text", Text2 = "Text2", Extra = "Extra", Color = new[] { 1.0, 0.5, 0.2 } };
             var to = mapper.Map(from);
