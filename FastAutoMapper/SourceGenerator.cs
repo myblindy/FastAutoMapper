@@ -33,13 +33,16 @@ public class SourceGenerator : ISourceGenerator
     public void Execute(GeneratorExecutionContext context)
     {
         context.AddSource("FastAutoMapperBaseClass.cs", $$"""
+            #pragma warning disable CS8601
+            #pragma warning disable CA1822
+
             namespace FastAutoMapper;
 
             {{GeneratedCodeAttributeText}}
             struct FastAutoMapperConfiguration<TFrom, TTo>
             {
                 public FastAutoMapperConfiguration<TFrom, TTo> ForMember<TToField>(System.Func<TTo, TToField> toSelect, System.Func<TFrom, TToField> fromSelect) => this;
-                public FastAutoMapperConfiguration<TFrom, TTo> ForMember<TToField>(System.Func<TTo, TToField> toSelect, System.Func<TFrom, object, TToField> fromSelect) => this;
+                public FastAutoMapperConfiguration<TFrom, TTo> ForMember<TToField>(System.Func<TTo, TToField> toSelect, System.Func<TFrom, object?, TToField> fromSelect) => this;
             }
 
             {{GeneratedCodeAttributeText}}
