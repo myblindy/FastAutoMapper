@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 
 namespace FastAutoMapper.Internal;
@@ -11,6 +12,9 @@ namespace FastAutoMapper.Internal;
 [Generator]
 public class SourceGenerator : ISourceGenerator
 {
+    internal static readonly string GeneratedCodeAttributeText =
+        $"[System.CodeDom.Compiler.GeneratedCode(\"{Assembly.GetAssembly(typeof(SourceGenerator)).GetName().Name}\", \"{Assembly.GetAssembly(typeof(SourceGenerator)).GetName().Version}\")]";
+
     static IEnumerable<ISymbol> GetNestedMembers(INamedTypeSymbol namedTypeSymbol)
     {
         while (namedTypeSymbol is not null)
@@ -24,18 +28,21 @@ public class SourceGenerator : ISourceGenerator
 
     public void Execute(GeneratorExecutionContext context)
     {
-        context.AddSource("FastAutoMapperBaseClass.cs", @"
-namespace FastAutoMapper;
+        context.AddSource("FastAutoMapperBaseClass.cs", $$"""
+            namespace FastAutoMapper;
 
-struct FastAutoMapperConfiguration<TFrom, TTo>
-{
-    public FastAutoMapperConfiguration<TFrom, TTo> ForMember<TToField>(Func<TTo, TToField> toSelect, Func<TFrom, TToField> fromSelect) => this;
-}
+            {{GeneratedCodeAttributeText}}
+            struct FastAutoMapperConfiguration<TFrom, TTo>
+            {
+                public FastAutoMapperConfiguration<TFrom, TTo> ForMember<TToField>(System.Func<TTo, TToField> toSelect, System.Func<TFrom, TToField> fromSelect) => this;
+            }
 
-class FastAutoMapperBase
-{
-    public FastAutoMapperConfiguration<TFrom, TTo> CreateMap<TFrom, TTo>() => new();
-}");
+            {{GeneratedCodeAttributeText}}
+            class FastAutoMapperBase
+            {
+                public FastAutoMapperConfiguration<TFrom, TTo> CreateMap<TFrom, TTo>() => new();
+            }
+            """);
 
         var sb = new StringBuilder();
         var sr = (SyntaxReceiver)context.SyntaxContextReceiver;
@@ -46,9 +53,11 @@ class FastAutoMapperBase
             if (namespaceRequired)
                 sb.AppendLine($"namespace {kvp.Key.ContainingNamespace} {{");
 
-            sb.AppendLine($@"
-partial class {kvp.Key.Name}
-{{");
+            sb.AppendLine($$"""
+                {{GeneratedCodeAttributeText}}
+                partial class {{kvp.Key.Name}}
+                {
+                """);
 
             var mi = kvp.Value;
             foreach (var (fromSymbol, toSymbol, memberOverrides) in mi.TypeMaps)
@@ -97,7 +106,7 @@ partial class {kvp.Key.Name}
         {
             public List<(INamedTypeSymbol From, INamedTypeSymbol To, List<(string ToField, SimpleLambdaExpressionSyntax FromLambdaExpression)> MemberOverrides)> TypeMaps = new();
         }
-        public readonly Dictionary<ITypeSymbol, MapperInfo> DerivedMappers = new();
+        public readonly Dictionary<ITypeSymbol, MapperInfo> DerivedMappers = new(SymbolEqualityComparer.IncludeNullability);
 
         public void OnVisitSyntaxNode(GeneratorSyntaxContext context)
         {

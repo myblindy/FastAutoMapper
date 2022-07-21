@@ -1,43 +1,79 @@
 ﻿using System.Numerics;
+using Tweey.Actors;
+using Tweey.Loaders;
 
-partial class Mapper : FastAutoMapper.FastAutoMapperBase
+namespace Tweey.Loaders
 {
-}
+    enum BuildingType { WorkPlace, Storage }
 
-namespace A
-{
-    class From
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+    class BuildingTemplate
     {
-        public string Text { get; set; }
-        public string Text2 { get; set; }
-        public string Extra { get; set; }
-        public double[] Color { get; set; }
+        public string Name { get; set; }
+        public BuildingType Type { get; set; }
+        public int Width { get; set; }
+        public int Height { get; set; }
+        public Vector4 Color { get; set; }
+    }
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+
+    class BuildingTemplateIn
+    {
+        public string? Name { get; set; }
+        public BuildingType Type { get; set; }
+        public int Width { get; set; }
+        public int Height { get; set; }
+        public float[]? Color { get; set; }
     }
 }
 
-namespace B
+namespace Tweey.Actors
 {
-    class To
+    class Building : BuildingTemplate
     {
-        public string Text { get; set; }
-        public string Text2 { get; set; }
-        public Vector3 Color { get; set; }
     }
 }
 
-namespace P
+namespace Tweey.Loaders
 {
-    using A;
-    class Program
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+    class ResourceIn
     {
+        public string Name { get; set; }
+        public double Weight { get; set; }
+        public float[] Color { get; set; }
+    }
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+
+    public class Resource
+    {
+        public string? Name { get; set; }
+        public double Weight { get; set; }
+        public Vector4 Color { get; set; }
+    }
+}
+
+namespace Tweey.Support
+{
+    internal partial class InternalMapper : FastAutoMapper.FastAutoMapperBase { }
+
+    internal static class GlobalMapper
+    {
+        public static InternalMapper Mapper { get; } = new();
+
+        static GlobalMapper()
+        {
+            Mapper.CreateMap<BuildingTemplate, Building>();
+            Mapper.CreateMap<BuildingTemplateIn, BuildingTemplate>()
+                .ForMember(x => x.Color, src => src.Color!.Length == 3 ? new Vector4(src.Color[0], src.Color[1], src.Color[2], 1) : new(src.Color));
+            Mapper.CreateMap<ResourceIn, Resource>()
+                .ForMember(x => x.Color, src => src.Color!.Length == 3 ? new Vector4(src.Color[0], src.Color[1], src.Color[2], 1) : new(src.Color));
+        }
+
         public static void Main()
         {
-            var mapper = new Mapper();
-            mapper.CreateMap<From, B.To>()
-                .ForMember(x => x.Color, x => new Vector3((float)x.Color[0], (float)x.Color[1], (float)x.Color[2]));
-
-            var from = new From { Text = "Text", Text2 = "Text2", Extra = "Extra", Color = new[] { 1.0, 0.5, 0.2 } };
-            var to = mapper.Map(from);
+            var template = new BuildingTemplate();
+            GlobalMapper.Mapper.Map(template);
         }
     }
 }
