@@ -1,5 +1,5 @@
 [![publish to nuget](https://github.com/myblindy/FastAutoMapper/actions/workflows/nuget.yml/badge.svg)](https://github.com/myblindy/FastAutoMapper/actions/workflows/nuget.yml)
-[![NuGet](http://img.shields.io/nuget/v/MB.FastAutoMapper.svg)](https://www.nuget.org/packages/MB.FastAutoMapper/)
+[![NuGet](http://img.shields.io/nuget/v/MB.FastAutoMapper.svg)](https://www.nuget.org/packages/MB.FastAutoMapper/) [![NuGet Downloads](http://img.shields.io/nuget/dt/MB.FastAutoMapper.svg)](https://www.nuget.org/packages/MB.FastAutoMapper/)
 
 # MB.FastAutoMapper
 
