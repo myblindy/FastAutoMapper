@@ -55,6 +55,11 @@ public class SourceGenerator : ISourceGenerator
         var sb = new StringBuilder();
         var sr = (SyntaxReceiver)context.SyntaxContextReceiver;
 
+        sb.AppendLine("""
+            #pragma warning disable CS8601
+            #pragma warning disable CA1822
+            """);
+
         foreach (var kvp in sr.DerivedMappers)
         {
             var namespaceRequired = kvp.Key.ContainingNamespace is INamespaceSymbol namespaceSymbol && !namespaceSymbol.IsGlobalNamespace;
